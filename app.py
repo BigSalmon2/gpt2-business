@@ -13,8 +13,9 @@ requests_queue = Queue()
 BATCH_SIZE = 1
 CHECK_INTERVAL = 0.1
 
-tokenizer = AutoTokenizer.from_pretrained("laxya007/gpt2_business")
-model = AutoModelWithLMHead.from_pretrained("laxya007/gpt2_business", return_dict=True)
+from transformers import AutoTokenizer, AutoModelWithLMHead
+tokenizer = AutoTokenizer.from_pretrained("huggingtweets/emailoctopus")
+model = AutoModelWithLMHead.from_pretrained("huggingtweets/emailoctopus")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 
