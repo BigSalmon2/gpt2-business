@@ -12,7 +12,7 @@ info:
     url: https://github.com/huggingface/transformers/blob/master/LICENSE
 
 servers:
-  - url: https://main-gpt2-business-leesangha.endpoint.ainize.ai/
+  - url: https://main-gpt2-business-zanderbush.endpoint.ainize.ai/
 
 paths:
   /gpt2-business/short:
