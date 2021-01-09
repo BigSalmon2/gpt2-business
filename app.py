@@ -15,6 +15,7 @@ CHECK_INTERVAL = 0.1
 
 from transformers import AutoTokenizer, AutoModelWithLMHead
 from transformers import AutoTokenizer, AutoModelWithLMHead
+from transformers import AutoTokenizer, AutoModelWithLMHead
 tokenizer = AutoTokenizer.from_pretrained("huggingtweets/bnbuzz")
 model = AutoModelWithLMHead.from_pretrained("huggingtweets/bnbuzz")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
