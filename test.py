@@ -3,7 +3,10 @@ import torch
 
 from torch.nn import functional as F
 from transformers import AutoTokenizer, AutoModelWithLMHead
+from transformers import AutoTokenizer, AutoModelWithLMHead
+
 tokenizer = AutoTokenizer.from_pretrained("huggingtweets/bnbuzz")
+
 model = AutoModelWithLMHead.from_pretrained("huggingtweets/bnbuzz")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
