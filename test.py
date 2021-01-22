@@ -2,8 +2,8 @@ from transformers import AutoModelWithLMHead, AutoTokenizer, top_k_top_p_filteri
 import torch
 
 from torch.nn import functional as F
-tokenizer = AutoTokenizer.from_pretrained("laxya007/gpt2_business")
-model = AutoModelWithLMHead.from_pretrained("laxya007/gpt2_business", return_dict=True)
+tokenizer = AutoTokenizer.from_pretrained("huggingtweets/bnbuzz")
+model = AutoModelWithLMHead.from_pretrained("huggingtweets/bnbuzz")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 
