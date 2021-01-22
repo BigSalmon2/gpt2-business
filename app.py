@@ -1,25 +1,27 @@
+from transformers import AutoModelWithLMHead, AutoTokenizer, top_k_top_p_filtering
+import torch
 from flask import Flask, request, Response, jsonify
-
-import json 
+from torch.nn import functional as F
+from queue import Queue, Empty
 import time
 import threading
-from queue import Queue, Empty
 
-import torch
-from torch.nn import functional as F
-from transformers import AutoModelWithLMHead
-
-
+#setting
 app = Flask(__name__)
 
 requests_queue = Queue()
 BATCH_SIZE = 1
 CHECK_INTERVAL = 0.1
 
-model = AutoModelWithLMHead.from_pretrained("laxya007/gpt2_business", return_dict=True)
+from transformers import AutoTokenizer, AutoModelWithLMHead
+from transformers import AutoTokenizer, AutoModelWithLMHead
+from transformers import AutoTokenizer, AutoModelWithLMHead
+tokenizer = AutoTokenizer.from_pretrained("huggingtweets/bnbuzz")
+model = AutoModelWithLMHead.from_pretrained("huggingtweets/bnbuzz")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model.to(device)
 
+# Queueing
 def handle_requests_by_batch():
     while True:
         requests_batch = []
@@ -30,69 +32,112 @@ def handle_requests_by_batch():
                 continue
 
             for requests in requests_batch:
-                requests['output'] = run_generate(requests['input'][0], requests['input'][1], requests['input'][2])
-
-
+                if len(requests['input']) == 2 :
+                    requests['output'] = run_word(requests['input'][0], requests['input'][1])
+                elif len(requests['input']) == 3 :
+                    requests['output'] = run_generation(requests['input'][0], requests['input'][1], requests['input'][2])
+                    
+#Thread
 threading.Thread(target=handle_requests_by_batch).start()
 
-def run_generate(input_ids, num_samples, length):
-    inputs = []
+def run_generation(sequence, num_samples, length):
+    try:
+        sequence = sequence.strip()
+        input_ids = tokenizer.encode(sequence, return_tensors='pt')
 
-    for input_id in input_ids:
-        inputs.append(int(input_id))
+        # input_ids also need to apply gpu device!
+        input_ids = input_ids.to(device)
 
-    token_tensor = torch.LongTensor([inputs]).to(device)
+        min_length = len(input_ids.tolist()[0])
+        length += min_length
 
-    outputs = model.generate(
-        token_tensor,
-        pad_token_id=50256,
-        max_length=length,
-        min_length=length,
-        do_sample=True,
-        top_k=50,
-        num_return_sequences=num_samples,
-    )
+        sample_outputs = model.generate(input_ids, pad_token_id=50256,
+                                        do_sample=True,
+                                        max_length=length,
+                                        min_length=length,
+                                        top_k=40,
+                                        num_return_sequences=num_samples)
 
-    outputs = str(outputs.tolist())
+        result = dict()
+        for idx, sample_output in enumerate(sample_outputs):
+            result[idx] = tokenizer.decode(sample_output.tolist()[min_length:], skip_special_tokens=True)
+        
+        return result
 
-    return outputs
+    except Exception as e:
+        print(e)
+        return 500
 
-@app.route("/gpt2-business", methods=["POST"])
-def gpt2():
+# Running GPT-2
+def run_word(sequence, num_samples):
+    try:
+        input_ids = tokenizer.encode(sequence, return_tensors="pt")
+        tokens_tensor = input_ids.to(device)
+
+        # get logits of last hidden state
+        next_token_logits = model(tokens_tensor).logits[:, -1, :]
+        # filter
+        filtered_next_token_logits = top_k_top_p_filtering(next_token_logits, top_k=50, top_p=1.0)
+        # sample
+        probs = F.softmax(filtered_next_token_logits, dim=-1)
+        next_token = torch.multinomial(probs, num_samples=num_samples)
+
+        result = dict()
+        for idx, token in enumerate(next_token.tolist()[0]):
+            result[idx] = tokenizer.decode(token)
+
+        return result
+
+    except Exception as e:
+        print(e)
+        return 500
+
+@app.route("/",methods=['GET'])
+def main():
+    return Response('success',status=200)
+@app.route("/gpt2-business/<type>", methods=['POST'])
+def gpt2_business(type):
+    print('in')
+    if type != 'short' and type != 'long' :
+        return jsonify({'error': 'This is the wrong address.'}), 400
 
     # 큐에 쌓여있을 경우,
     if requests_queue.qsize() > BATCH_SIZE:
-        return jsonify({'error': 'TooManyReqeusts'}), 429
+        return jsonify({'error': 'Too Many Requests'}), 429
 
-    data = request.json
-
+   
     try:
-        args= [] 
-        args.append(data['text'])
-        args.append(data['num_samples'])
-        args.append(data['length'])
+        args = []
+        text = request.form['text']
+        num_samples = int(request.form['num_samples'])
+        args.append(text)
+        args.append(num_samples)
+
+        if type == 'long':
+            length = int(request.form['length'])
+            args.append(length)
+
     except Exception:
-        return jsonify({'error':'Invalid Inputs'}), 400
-    
+        print("Empty Text")
+        return Response("fail", status=400)
+
+    # Queue - put data
     req = {
         'input': args
     }
     requests_queue.put(req)
 
+    # Queue - wait & check
     while 'output' not in req:
         time.sleep(CHECK_INTERVAL)
-    
-    result = req['output']
+ 
+    return jsonify(req['output'])
 
-    return result
+# Health Check
+@app.route("/healthz", methods=["GET"])
+def healthCheck():
+    return "", 200
 
-@app.route('/healthz')
-def health():
-    return "ok", 200
-
-@app.route('/')
-def main():
-    return "USE API", 200
 
 if __name__ == "__main__":
     from waitress import serve
